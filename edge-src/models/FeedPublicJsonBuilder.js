@@ -7,6 +7,7 @@ import {
 } from "../../common-src/StringUtils";
 import {humanizeMs, msToRFC3339} from "../../common-src/TimeUtils";
 import {ENCLOSURE_CATEGORIES, STATUSES} from "../../common-src/Constants";
+import {isValidMediaFile} from "../../common-src/MediaFileUtils";
 
 const DEFAULT_MICROFEED_VERSION = 'v1';
 
@@ -32,7 +33,7 @@ export default class FeedPublicJsonBuilder {
     if (item.image) {
       item.image = urlJoinWithRelative(this.publicBucketUrl, item.image);
     }
-    if (item.mediaFile && item.mediaFile.category) {
+    if (isValidMediaFile(item.mediaFile)) {
       item.mediaFile.isAudio = item.mediaFile.category === ENCLOSURE_CATEGORIES.AUDIO;
       item.mediaFile.isDocument = item.mediaFile.category === ENCLOSURE_CATEGORIES.DOCUMENT;
       item.mediaFile.isExternalUrl = item.mediaFile.category === ENCLOSURE_CATEGORIES.EXTERNAL_URL;
@@ -64,11 +65,12 @@ export default class FeedPublicJsonBuilder {
     publicContent['description'] = channel.description || '';
 
     if (channel.image) {
-      publicContent['icon'] = urlJoinWithRelative(this.publicBucketUrl, channel.image);
+      publicContent['icon'] = urlJoinWithRelative(this.publicBucketUrl, channel.image, this.baseUrl);
     }
 
     if (this.webGlobalSettings.favicon && this.webGlobalSettings.favicon.url) {
-        publicContent['favicon'] = urlJoinWithRelative(this.publicBucketUrl, this.webGlobalSettings.favicon.url);
+        publicContent['favicon'] = urlJoinWithRelative(
+          this.publicBucketUrl, this.webGlobalSettings.favicon.url, this.baseUrl);
     }
 
     if (channel.publisher) {
@@ -118,7 +120,8 @@ export default class FeedPublicJsonBuilder {
       microfeedExtra['subscribe_methods'] = '';
     } else {
       microfeedExtra['subscribe_methods'] = subscribeMethods.methods.filter((m) => m.enabled).map((m) => {
-        m.image = urlJoinWithRelative(this.baseUrl, m.image);
+        // TODO: supports custom icons that are hosted on R2
+        m.image = urlJoinWithRelative(this.publicBucketUrl, m.image, this.baseUrl);
         if (!m.editable) {
           switch (m.type) {
             case 'rss':
@@ -199,21 +202,23 @@ export default class FeedPublicJsonBuilder {
       guid: item.guid,
     };
 
-    if (mediaFile.url) {
-      attachment['url'] = buildAudioUrlWithTracking(mediaFile.url, trackingUrls);
-    }
-    if (mediaFile.contentType) {
-      attachment['mime_type'] = mediaFile.contentType;
-    }
-    if (mediaFile.sizeByte) {
-      attachment['size_in_byte'] = mediaFile.sizeByte;
-    }
-    if (mediaFile.durationSecond) {
-      attachment['duration_in_seconds'] = mediaFile.durationSecond;
-      _microfeed['duration_hhmmss'] = secondsToHHMMSS(mediaFile.durationSecond);
-    }
-    if (Object.keys(attachment).length > 0) {
-      newItem['attachments'] = [attachment];
+    if (isValidMediaFile(mediaFile)) {
+      if (mediaFile.url) {
+        attachment['url'] = buildAudioUrlWithTracking(mediaFile.url, trackingUrls);
+      }
+      if (mediaFile.contentType) {
+        attachment['mime_type'] = mediaFile.contentType;
+      }
+      if (mediaFile.sizeByte) {
+        attachment['size_in_byte'] = mediaFile.sizeByte;
+      }
+      if (mediaFile.durationSecond) {
+        attachment['duration_in_seconds'] = mediaFile.durationSecond;
+        _microfeed['duration_hhmmss'] = secondsToHHMMSS(mediaFile.durationSecond);
+      }
+      if (Object.keys(attachment).length > 0) {
+        newItem['attachments'] = [attachment];
+      }
     }
     if (item.link) {
       newItem['url'] = item.link;
